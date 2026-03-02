@@ -1,0 +1,41 @@
+# ============================================================
+# Data-Juicer 多模态（图文）安全数据清洗配置
+# ============================================================
+# 针对 MM-SafetyBench 等图文对数据的清洗
+# 保留三种攻击形态的数据，不过度过滤
+
+# 数据路径
+dataset_path: "data/unified/multimodal_safety.jsonl"
+export_path: "data/cleaned/multimodal_safety_cleaned.jsonl"
+
+# 处理器配置
+np: 8
+
+# 算子管道
+process:
+  # 1. 文本清理
+  - clean_html_mapper: {}
+  - fix_unicode_mapper: {}
+  - whitespace_normalization_mapper: {}
+
+  # 2. 文本长度过滤（更宽松 - 多模态场景文本可能很短）
+  - text_length_filter:
+      min_len: 5           # 多模态场景文本可以很短
+      max_len: 5000
+
+  # 3. 图像尺寸过滤
+  - image_size_filter:
+      min_width: 50
+      min_height: 50
+      max_width: 10000
+      max_height: 10000
+
+  # 4. 图像宽高比过滤
+  - image_aspect_ratio_filter:
+      min_ratio: 0.1
+      max_ratio: 10.0
+
+  # 5. 精确去重（基于文本）
+  - document_deduplicator:
+      lowercase: true
+      ignore_non_character: true

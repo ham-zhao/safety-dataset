@@ -1,0 +1,37 @@
+# ============================================================
+# 运行模式配置 - 控制全流程的数据规模
+# ============================================================
+# 工作流：先用 smoke_test 跑通全流程确认无报错，
+#         再改为 full_run 产出正式结果。
+
+run_mode: "smoke_test"  # 可选: "smoke_test" | "full_run"
+
+smoke_test:
+  text_sample_size: 2000        # 文本安全数据取 2000 条
+  image_text_sample_size: 500   # 图文数据取 500 对
+  synthesis_count: 50           # 合成增强 50 条
+  classifier_epochs: 1          # 分类器只训 1 个 epoch
+  batch_size: 32
+  learning_rate: 2.0e-5
+  description: "20-30分钟跑完全流程，验证代码无报错"
+
+full_run:
+  text_sample_size: 50000       # 文本安全数据 50K
+  image_text_sample_size: 5040  # MM-SafetyBench 全量
+  synthesis_count: 500          # 合成增强 500 条
+  classifier_epochs: 5          # 分类器训 5 个 epoch
+  batch_size: 32
+  learning_rate: 2.0e-5
+  description: "4-6小时跑完，产出完整数据集+模型+评估"
+
+# 通用配置
+common:
+  seed: 42
+  device: "mps"                 # MacBook M4 Max GPU
+  num_workers: 8
+  model_name: "distilbert-base-uncased"
+  clip_model: "ViT-B-32"
+  clip_pretrained: "openai"
+  max_text_length: 512
+  output_dir: "results"
+  data_dir: "data"

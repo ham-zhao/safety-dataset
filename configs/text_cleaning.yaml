@@ -1,0 +1,46 @@
+# ============================================================
+# Data-Juicer 文本安全数据清洗配置
+# ============================================================
+# 注意：安全数据的清洗阈值比普通数据更宽松
+# 原因：有害内容本身可能"格式混乱"、语法不好
+# 不能因为文本质量低就过滤掉有害样本
+
+# 数据路径
+dataset_path: "data/unified/text_safety.jsonl"
+export_path: "data/cleaned/text_safety_cleaned.jsonl"
+
+# 处理器配置
+np: 8  # 并行进程数
+
+# 算子管道
+process:
+  # 1. 基础清理（宽松阈值）
+  - clean_html_mapper: {}
+  - fix_unicode_mapper: {}
+  - punctuation_normalization_mapper: {}
+  - whitespace_normalization_mapper: {}
+
+  # 2. 文本长度过滤（比普通数据宽松 - 有害内容可能很短）
+  - text_length_filter:
+      min_len: 20         # 普通数据通常 50+，安全数据放宽到 20
+      max_len: 10000
+
+  # 3. 语言识别（宽松 - 有害文本语法可能不好）
+  - language_id_score_filter:
+      lang: "en"
+      min_score: 0.5      # 普通数据通常 0.8+，安全数据放宽到 0.5
+
+  # 4. 精确去重
+  - document_deduplicator:
+      lowercase: true
+      ignore_non_character: true
+
+  # 5. 模糊去重（跨数据集去重的关键）
+  - document_minhash_deduplicator:
+      tokenization: "space"
+      window_size: 5
+      num_permutations: 256
+      jaccard_threshold: 0.7    # 相似度 > 0.7 视为重复
+      ignore_pattern: null
+      num_bands: null
+      num_rows_per_band: null

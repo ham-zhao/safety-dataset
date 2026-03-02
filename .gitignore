@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data (large files - keep final outputs)
+data/raw/
+data/unified/
+data/cleaned/
+data/augmented/typographic_images/
+
+# Model checkpoints (large)
+results/models/*/pytorch_model.bin
+results/models/*/model.safetensors
+results/models/*/model.pt
+
+# API keys
+configs/api_config.yaml
+
+# Logs
+*.log

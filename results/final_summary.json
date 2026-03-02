@@ -1,0 +1,14 @@
+{
+  "data_pipeline": {
+    "1. Raw (Unified)": 9480,
+    "2. Cleaned": 6529,
+    "3. Augmented": 243,
+    "4. Total (Cleaned + Aug)": 6772
+  },
+  "final_datasets": {
+    "sft_mix": 6772,
+    "dpo_pairs": 4225,
+    "eval_set": 1305
+  },
+  "model_metrics": {}
+}

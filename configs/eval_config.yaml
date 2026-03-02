@@ -1,0 +1,62 @@
+# ============================================================
+# 评估配置 - Benchmark 评估和消融实验参数
+# ============================================================
+
+# 评估 Benchmark 列表
+benchmarks:
+  wildguard_test:
+    name: "WildGuardTest"
+    description: "5.3K 人工标注安全测试集，绝对不可污染训练集"
+    metrics: ["auc_roc", "precision", "recall", "f1", "per_class_f1"]
+    target_auc: 0.85
+
+  harmbench:
+    name: "HarmBench"
+    description: "~500 条标准有害内容 benchmark"
+    metrics: ["recall"]
+    target_recall: 0.90
+
+  xstest:
+    name: "XSTest"
+    description: "250 对 over-refusal 测试"
+    metrics: ["over_refusal_rate"]
+    target_over_refusal: 0.10  # < 10%
+
+  mm_safetybench:
+    name: "MM-SafetyBench"
+    description: "5040 图文对，13场景×3攻击类型"
+    metrics: ["asr_vanilla", "asr_typographic", "asr_query_relevant"]
+    target_asr: 0.20  # < 20%
+
+# 消融实验配置
+ablation:
+  experiments:
+    - name: "Full"
+      remove: null
+      description: "完整数据集，作为对照基准"
+
+    - name: "-Safety"
+      remove: "wildguardmix"
+      description: "去掉 WildGuardMix，验证安全数据是核心"
+
+    - name: "-Contrastive"
+      remove: "contrastive"
+      description: "去掉对比无害数据，验证对比构造必要性"
+
+    - name: "-Augmentation"
+      remove: "augmented"
+      description: "去掉合成增强数据，验证增强的价值"
+
+    - name: "-Copyright"
+      remove: "copyright"
+      description: "去掉版权数据，验证版权类别需专门数据"
+
+    - name: "-ToxiGen"
+      remove: "toxigen"
+      description: "去掉 ToxiGen，验证隐式毒性贡献"
+
+# 版权检测配置
+copyright:
+  similarity_thresholds: [0.80, 0.85, 0.90]
+  ip_embedding_path: "data/augmented/ip_embeddings.pkl"
+  num_reference_ips: 20

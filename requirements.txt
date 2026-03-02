@@ -1,0 +1,47 @@
+# ============================================================
+# 多模态内容安全审核系统 - 依赖列表
+# ============================================================
+
+# Data-Juicer 数据处理框架
+py-data-juicer[all]
+
+# HuggingFace 生态
+datasets>=2.14.0
+transformers>=4.30.0
+tokenizers>=0.13.0
+accelerate>=0.20.0
+
+# 毒性检测
+detoxify>=0.5.0
+
+# CLIP 跨模态
+open-clip-torch>=2.20.0
+
+# OCR + 图像处理
+pytesseract>=0.3.10
+Pillow>=9.0.0
+
+# PyTorch (MPS backend)
+torch>=2.0.0
+torchvision>=0.15.0
+
+# 机器学习评估
+scikit-learn>=1.2.0
+
+# LLM API
+anthropic>=0.18.0
+
+# 可视化
+seaborn>=0.12.0
+matplotlib>=3.7.0
+
+# 工具库
+pyyaml>=6.0
+tqdm>=4.65.0
+jsonlines>=3.1.0
+pandas>=2.0.0
+numpy>=1.24.0
+
+# Notebook
+jupyter>=1.0.0
+ipywidgets>=8.0.0
