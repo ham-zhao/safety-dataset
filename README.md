@@ -1,203 +1,274 @@
 # 多模态内容安全审核系统
 
-> 面向 TikTok 审核场景的多模态内容安全数据构建、模型训练与量化评估完整闭环
+面向 TikTok 审核场景，从零构建安全数据集 → 训练分类器 → 量化评估 → 消融验证的完整闭环。
 
-## 项目定位
+## 第一次来？从这里开始
 
-本项目处于 AI 训练链路的 **Post-train 数据准备阶段**：
+| 你的目标 | 去哪里 | 预计时间 |
+|---------|--------|---------|
+| 看懂这个项目在做什么 | 打开 `notebooks/00_project_overview.ipynb` | 10 分钟 |
+| 看最终实验结论和数据 | 直接跳到本文档 [实验结论](#实验结论) 章节 | 5 分钟 |
+| 跑通全部代码 | 按 [运行流程](#运行流程) 一步步执行 | 30 分钟 |
+| 理解每个环节的原理 | 按 [深度阅读路径](#阅读路径-b深度理解每个环节2-小时) 顺序读 Notebook | 2 小时 |
+| 改参数做实验 | 看 [配置文件](#配置文件configs) 章节，改 `configs/run_config.yaml` | 5 分钟 |
+| 排查报错 | 查 [踩坑记录](#踩坑记录) 或 `docs/interaction_log.md` | — |
+
+---
+
+## 实验结论
+
+### 这个项目做了什么
+
+把 8 个公开安全数据集（9,480 条）经过清洗（6,529 条）、增强（+243 条），训练了两个分类器，在标准 Benchmark 上评估，并通过 6 组消融实验量化了每个数据组件的贡献。
+
+### 核心数字
+
+**DistilBERT 文本分类器**（66M 参数，推理 <10ms）：
+
+| 指标 | 值 | 含义 |
+|------|-----|------|
+| AUC-ROC | 0.9962 | 区分有害/无害的综合能力 |
+| Recall | 0.9650 | 96.5% 的有害内容被拦截 |
+| Precision | 0.9892 | 被拦截内容中 98.9% 确实有害 |
+| F1 | 0.9770 | Precision 和 Recall 的调和平均 |
+
+**CLIP 多模态分类器**（冻结 CLIP backbone + 线性头）：
+
+| 指标 | 值 | 含义 |
+|------|-----|------|
+| AUC-ROC | 0.9506 | 图文混合内容的分类能力 |
+| Recall | 1.0000 | 所有有害内容被拦截 |
+| Precision | 0.8966 | 较高误拦率，需后续人工复核 |
+
+### 消融实验：哪些数据最重要？
+
+每次去掉一组数据重新训练，看性能下降多少：
+
+| 实验 | AUC | F1 | Recall | 与 Full 的 AUC 差 | 结论 |
+|------|-----|-----|--------|------------------|------|
+| **Full（基准）** | 0.9959 | 0.9831 | 0.9837 | — | 完整数据集 |
+| -Safety | 0.9948 | 0.9644 | 0.9445 | -0.0011 | Recall 下降最大（-3.9%），安全数据是基石 |
+| -ToxiGen | 0.9946 | 0.9652 | 0.9828 | -0.0013 | AUC 下降最大，隐式毒性数据有独特贡献 |
+| -Copyright | 0.9932 | 0.9768 | 0.9647 | -0.0027 | 版权数据影响超预期 |
+| -Augmentation | 0.9942 | 0.9751 | 0.9762 | -0.0017 | 增强数据对整体有正面作用 |
+| -Contrastive | 0.9972 | 0.9814 | 0.9703 | +0.0013 | 对比数据在 smoke_test 下效果不显著，full_run 下预期显著 |
+
+> **关键发现**：安全数据（WildGuardMix）是性能基石，去掉后 Recall 从 98.4% 降到 94.5%。ToxiGen 的隐式毒性数据贡献独特，去掉后 AUC 下降最多。
+
+### 最终交付的数据文件
+
+| 文件 | 条数 | 用途 | 格式 |
+|------|------|------|------|
+| `data/final/safety_sft_mix.jsonl` | 6,772 | 安全对齐 SFT 训练 | JSONL |
+| `data/final/safety_dpo_pairs.jsonl` | 4,225 | DPO 偏好训练 | JSONL (prompt/chosen/rejected) |
+| `data/final/safety_eval.jsonl` | 1,305 | 模型评估 | JSONL |
+
+---
+
+## 运行流程
+
+### 前提条件
+
+- macOS（已在 M4 Max 上验证）或 Linux
+- Python 3.9+
+- 磁盘空间 ~5GB（数据 + 模型）
+
+### 验证模式（smoke_test，约 30 分钟）
+
+```bash
+# 第 1 步：环境搭建（约 3 分钟）
+bash setup.sh              # 创建 venv，安装所有依赖
+source venv/bin/activate   # 激活虚拟环境
+
+# 第 2 步：下载数据 + 格式转换（约 5 分钟）
+python3 scripts/run_download.py
+# → 产出：data/unified/text_safety.jsonl (9,480 条)
+
+# 第 3 步：数据清洗（约 1 分钟）
+python3 scripts/run_cleaning.py
+# → 产出：data/cleaned/text_safety_cleaned.jsonl (6,529 条)
+
+# 第 4 步：数据增强（约 1 分钟）
+python3 scripts/run_augmentation.py
+# → 产出：data/augmented/augmented_data.jsonl (243 条)
+
+# 第 5 步：模型训练（约 10 分钟）
+python3 scripts/run_training.py
+# → 产出：results/models/text_classifier/ 和 multimodal_classifier/
+
+# 第 6 步：Benchmark 评估（约 2 分钟）
+python3 scripts/run_evaluation.py
+# → 产出：results/evaluation/
+
+# 第 7 步：消融实验（约 10 分钟，训练 6 个模型）
+python3 scripts/run_ablation.py
+# → 产出：results/ablation/ablation_results.json
+
+# 第 8 步：生成最终数据文件（约 1 分钟）
+python3 scripts/generate_report.py
+# → 产出：data/final/ 下的 3 个 JSONL + dataset_card.md
+```
+
+### 正式模式（full_run，约 4-6 小时）
+
+打开 `configs/run_config.yaml`，把第 7 行改成：
+
+```yaml
+run_mode: "full_run"
+```
+
+然后按上面同样的顺序运行。区别是数据量从 2,000 → 50,000，训练从 1 epoch → 5 epochs。
+
+> **注意**：训练阶段耗时较长，建议关闭电脑休眠（`系统设置 → 电池 → 永不`），或在 `tmux` / `screen` 中运行。
+
+---
+
+## 项目地图
+
+### Notebooks（11 个）
+
+打开方式：`jupyter notebook`，然后在浏览器中点击对应文件。或用 VS Code 直接打开 `.ipynb`。
+
+所有 Notebook 已执行完毕，直接打开即可看到输出和图表，不需要重新运行。
+
+| 文件名 | 做什么 | 什么时候看 |
+|--------|--------|-----------|
+| `00_project_overview.ipynb` | 7 个核心概念的中文讲解 | 第一次看项目时 |
+| `01_data_exploration.ipynb` | 8 个数据集的统计和 7 张图 | 想了解数据长什么样 |
+| `02_safety_taxonomy.ipynb` | 14 类风险分类 + 覆盖度热力图 | 想了解分类体系 |
+| `03_datajuicer_text_pipeline.ipynb` | 文本清洗过程和前后对比 | 想了解清洗策略 |
+| `04_datajuicer_multimodal_pipeline.ipynb` | OCR 测试 + CLIP 分析 + IP 库 | 想了解多模态处理 |
+| `05_data_augmentation.ipynb` | 5 种增强策略和效果分析 | 想了解数据增强 |
+| `06_text_classifier_training.ipynb` | DistilBERT 训练曲线 + 错误分析 | 想了解文本模型 |
+| `07_multimodal_classification.ipynb` | CLIP 分类 + 版权检测结果 | 想了解多模态模型 |
+| `08_benchmark_evaluation.ipynb` | 4 个 Benchmark 的评估结果 | 想看模型多好 |
+| `09_ablation_study.ipynb` | 6 组消融实验 + 雷达图 | 想看哪些数据重要 |
+| `10_dashboard_report.ipynb` | 全项目汇总 Dashboard | 看最终总结 |
+
+### 脚本（scripts/）
+
+运行方式：`source venv/bin/activate && python3 scripts/xxx.py`
+
+| 文件名 | 做什么 | 运行顺序 |
+|--------|--------|---------|
+| `run_download.py` | 下载 8 个数据集 + 转换格式 | 第 1 个 |
+| `run_cleaning.py` | 清洗文本和多模态数据 | 第 2 个 |
+| `run_augmentation.py` | 运行 5 种数据增强 | 第 3 个 |
+| `run_training.py` | 训练文本 + 多模态分类器 | 第 4 个 |
+| `run_evaluation.py` | 在 Benchmark 上评估 | 第 5 个 |
+| `run_ablation.py` | 运行 6 组消融实验 | 第 6 个 |
+| `generate_report.py` | 生成 SFT/DPO/Eval 文件 | 第 7 个 |
+
+### 配置文件（configs/）
+
+打开方式：任意文本编辑器。
+
+| 文件名 | 做什么 | 什么时候改 |
+|--------|--------|-----------|
+| `run_config.yaml` | 控制数据量和训练轮数 | **最常改**：`run_mode` 从 `smoke_test` 改为 `full_run` |
+| `eval_config.yaml` | Benchmark 目标值 + 消融实验配置 | 想加/删消融实验组 |
+| `text_cleaning.yaml` | 清洗阈值（文本长度、语言分数） | 想调清洗松紧度 |
+| `image_text_cleaning.yaml` | 多模态清洗参数 | 一般不需要改 |
+
+### 源代码（src/）
+
+一般不需要直接看源码。如果想了解实现细节：
+
+| 目录 | 做什么 | 核心文件 |
+|------|--------|---------|
+| `src/data_download/` | 数据下载和格式转换 | `format_converter.py`（统一 8 个数据集格式） |
+| `src/cleaning/` | 清洗 + OCR + CLIP | `text_safety_pipeline.py`（5 步清洗）、`cross_modal_validator.py`（CLIP） |
+| `src/augmentation/` | 5 种增强策略 | `contrastive_generator.py`（对比样本）最关键 |
+| `src/training/` | 模型训练 | `text_classifier.py`（DistilBERT）、`multimodal_classifier.py`（CLIP Head） |
+| `src/evaluation/` | 评估和消融 | `ablation_runner.py`（消融实验）、`safety_metrics.py`（指标计算） |
+
+### 结果文件（results/）
+
+| 路径 | 内容 | 用什么打开 |
+|------|------|-----------|
+| `results/figures/*.png` | 23 张可视化图表 | 图片查看器 / Finder 预览 |
+| `results/models/` | 8 个模型 checkpoint | 代码加载（PyTorch / HuggingFace） |
+| `results/ablation/ablation_results.json` | 消融实验数值结果 | 文本编辑器 / `python3 -m json.tool` |
+| `results/final_summary.json` | 全项目数据流统计 | 文本编辑器 |
+
+---
+
+## 阅读路径
+
+### 路径 A：快速了解结论（30 分钟）
+
+1. **本 README 的 [实验结论](#实验结论)**（5 分钟）→ 看到核心数字和关键发现
+2. **`notebooks/10_dashboard_report.ipynb`**（10 分钟）→ 看到数据流全貌和 Dashboard 图表
+3. **`notebooks/09_ablation_study.ipynb`**（15 分钟）→ 看到消融实验细节和雷达图
+
+### 路径 B：深度理解每个环节（2 小时）
+
+1. **`notebooks/00_project_overview.ipynb`**（10 分钟）→ 理解 7 个核心概念（Post-train、级联架构、Modal Gap...）
+2. **`notebooks/01_data_exploration.ipynb`**（15 分钟）→ 理解 8 个数据集各自的特点和分布
+3. **`notebooks/03_datajuicer_text_pipeline.ipynb`**（15 分钟）→ 理解为什么安全数据清洗要用宽松阈值
+4. **`notebooks/05_data_augmentation.ipynb`**（20 分钟）→ 理解对比样本为什么能解决 over-refusal
+5. **`notebooks/06_text_classifier_training.ipynb`**（20 分钟）→ 理解 DistilBERT 训练和 Precision-Recall 的取舍
+6. **`notebooks/09_ablation_study.ipynb`**（20 分钟）→ 理解消融实验怎么量化每个组件的贡献
+7. **`notebooks/04_datajuicer_multimodal_pipeline.ipynb`**（20 分钟）→ 理解 OCR + CLIP 双层防护
+
+### 路径 C：只看多模态部分（40 分钟）
+
+1. **`notebooks/04_datajuicer_multimodal_pipeline.ipynb`**（20 分钟）→ OCR 提取、CLIP 相似度、版权 embedding
+2. **`notebooks/07_multimodal_classification.ipynb`**（20 分钟）→ CLIP Head 训练和版权检测评估
+
+---
+
+## 背景知识
+
+### 这个项目在 AI 链路中的位置
 
 ```
-Pre-train 数据清洗 → Pre-train 训练 → [Post-train 数据准备 ← 本项目] → SFT/DPO 训练 → Chat Model
+Pre-train 数据清洗 → Pre-train → [Post-train 数据准备 ← 这个项目] → SFT/DPO → Chat Model
 ```
 
-核心任务：构建高质量的安全对齐训练数据（SFT + DPO），训练轻量级安全分类器，并通过标准 Benchmark 量化评估 + 消融实验验证每个环节的价值。
+大模型训练完之后，需要用安全数据做 SFT（指令微调）和 DPO（偏好对齐），让模型学会拒绝有害请求。本项目就是构建这些安全训练数据。
 
-## 完整闭环
+### TikTok 级联审核架构
 
 ```
-数据构建（Data-Juicer 清洗+增强）
+用户上传内容
   ↓
-模型训练（DistilBERT 文本分类 + CLIP 多模态分类）
+第 1 层：DistilBERT（<10ms，66M 参数）→ 拦截 90% 有害内容  ← 本项目训练
   ↓
-量化评估（WildGuardTest AUC / HarmBench Recall / XSTest Over-refusal）
+第 2 层：CLIP Head（~100ms）→ 处理图文混合攻击              ← 本项目训练
   ↓
-消融实验（验证每个数据组件的贡献）
+第 3 层：7B/13B LLM（~1s）→ 处理困难样本
   ↓
-反馈优化（发现数据短板 → 回到数据构建）
+第 4 层：人工复审 → 最终仲裁
 ```
 
-## 14 类安全风险体系
+### 14 类安全风险
 
-| 编号 | 风险类别 | 编号 | 风险类别 |
-|------|---------|------|---------|
+| 编号 | 类别 | 编号 | 类别 |
+|------|-----|------|-----|
 | 01 | 非法活动 | 08 | 政治游说 |
 | 02 | 仇恨言论 | 09 | 隐私侵犯 |
 | 03 | 恶意软件 | 10 | 法律建议 |
 | 04 | 身体伤害 | 11 | 财务建议 |
 | 05 | 经济犯罪 | 12 | 健康咨询 |
 | 06 | 欺诈行为 | 13 | 政府决策 |
-| 07 | 色情内容 | **14** | **版权/IP侵权** |
+| 07 | 色情内容 | **14** | **版权侵权**（TikTok 特有） |
 
-> 第 14 类（版权/IP侵权）是针对 TikTok 视频平台场景的独立扩展，使用 CLIP embedding 余弦相似度匹配实现。
-
-## TikTok 多模型级联架构
-
-```
-用户上传内容
-  ↓
-第一层：轻量分类器（DistilBERT，毫秒级）← 本项目训练
-  ↓
-第二层：中等模型（7B 级别，百毫秒级）
-  ↓
-第三层：大模型 / 人工复核（秒级）
-```
-
-## 核心产出
-
-| 产出 | 文件 | 规模 |
-|------|------|------|
-| 安全 SFT 数据集 | `data/final/safety_sft_mix.jsonl` | 6,772 条 |
-| 安全 DPO 偏好对 | `data/final/safety_dpo_pairs.jsonl` | 4,225 对 |
-| 评估数据集 | `data/final/safety_eval.jsonl` | 1,305 条 |
-| 数据集卡片 | `data/final/dataset_card.md` | — |
-| 文本分类器 | `results/models/text_classifier/` | DistilBERT 微调 |
-| 多模态分类器 | `results/models/multimodal_classifier/` | CLIP Head |
-| 消融模型 (×6) | `results/models/text_classifier_ablation_*/` | 6 组对照实验 |
-| 可视化图表 | `results/figures/` | 23 张 PNG |
-| Dashboard | `results/final_summary.json` | 全项目汇总 |
-
-## 数据集来源（8 个公开数据集）
-
-| 数据集 | 规模 | 用途 |
-|--------|------|------|
-| WildGuardMix | 92K | 核心安全训练+测试 |
-| WildJailbreak | 262K | 对比构造，防 over-refusal |
-| MM-SafetyBench | 5,040 | 多模态安全 benchmark |
-| ToxiGen | 274K | 隐式仇恨言论 |
-| SafeBench | 2,300 | 辅助安全对 |
-| XSTest | 250 | Over-refusal 测试 |
-| HarmBench | ~500 | 标准有害 benchmark |
-| LLaVA-150K | 5K 子集 | 正常数据对照 |
-
-## 快速开始
-
-```bash
-# 1. 环境搭建
-bash setup.sh
-source venv/bin/activate
-
-# 2. 下载数据 + 格式转换
-python3 scripts/run_download.py
-
-# 3. 数据清洗
-python3 scripts/run_cleaning.py
-
-# 4. 数据增强
-python3 scripts/run_augmentation.py
-
-# 5. 模型训练（DistilBERT + CLIP Head）
-python3 scripts/run_training.py
-
-# 6. Benchmark 评估
-python3 scripts/run_evaluation.py
-
-# 7. 消融实验（6 组）
-python3 scripts/run_ablation.py
-
-# 8. 生成最终输出文件
-python3 scripts/generate_report.py
-```
-
-默认 `smoke_test` 模式（~30 分钟跑完全流程）。切换到完整模式：修改 `configs/run_config.yaml` 中 `run_mode: "full_run"`（~4-6 小时）。
-
-## Notebook 目录（11 个）
-
-| # | Notebook | 内容 |
-|---|---------|------|
-| 00 | project_overview | 项目概览与 7 个核心概念 |
-| 01 | data_exploration | 8 个数据集统计与 7 张可视化 |
-| 02 | safety_taxonomy | 14 类风险分类体系 + 覆盖度热力图 |
-| 03 | datajuicer_text_pipeline | 文本清洗 Pipeline（宽松阈值） |
-| 04 | datajuicer_multimodal_pipeline | OCR + CLIP + 版权 embedding 库 |
-| 05 | data_augmentation | 5 种增强策略 + 对比样本演示 |
-| 06 | text_classifier_training | DistilBERT 训练 + 错误分析 |
-| 07 | multimodal_classification | CLIP Head 训练 + 版权检测评估 |
-| 08 | benchmark_evaluation | 4 个 Benchmark 评估 + 阈值分析 |
-| 09 | ablation_study | 6 组消融实验 + 雷达图 |
-| 10 | dashboard_report | Dashboard + 最终报告 + 输出文件生成 |
-
-## 运行环境
-
-- MacBook Pro M4 Max（16核CPU, 40核GPU, 128GB统一内存）
-- PyTorch MPS backend 加速
-- Python 3.9+
-
-## 项目结构
-
-```
-safety-dataset/
-├── configs/                # 配置文件
-│   ├── run_config.yaml         # smoke_test / full_run 两档控制
-│   ├── api_config.yaml         # Anthropic API 配置
-│   ├── eval_config.yaml        # Benchmark + 消融实验配置
-│   ├── text_cleaning.yaml      # Data-Juicer 文本清洗配置
-│   └── image_text_cleaning.yaml
-├── data/                   # 数据目录
-│   ├── raw/                    # 原始下载数据（8 个数据集）
-│   ├── unified/                # 统一格式（text_safety + multimodal_safety）
-│   ├── cleaned/                # 清洗后数据
-│   ├── augmented/              # 增强数据 + IP embedding 库 + 攻击图片
-│   └── final/                  # 最终交付（SFT + DPO + Eval + Card）
-├── notebooks/              # 11 个 Jupyter Notebook（00-10）
-├── src/                    # 源代码模块
-│   ├── data_download/          # 数据下载 + 格式转换
-│   ├── cleaning/               # DJ 清洗 + OCR + CLIP 跨模态验证
-│   ├── augmentation/           # 对比生成 + 类别平衡 + 印刷术攻击 + 版权 + 改写
-│   ├── training/               # DistilBERT + CLIP Head 分类器
-│   ├── evaluation/             # Benchmark 评估 + 版权检测 + 消融实验
-│   └── utils/                  # 配置加载 + 可视化
-├── scripts/                # 全流程运行脚本（7 个）
-├── results/                # 输出
-│   ├── figures/                # 23 张可视化 PNG
-│   ├── models/                 # 8 个模型 checkpoint
-│   ├── training/               # 训练结果 JSON
-│   ├── evaluation/             # 评估结果 JSON
-│   ├── ablation/               # 消融实验结果 JSON
-│   └── final_summary.json      # 全项目汇总
-└── docs/                   # 文档（交互记录）
-```
-
-## 数据流水线
-
-```
-8 个公开数据集 (Raw)
-  ↓ format_converter.py
-统一格式 (9,480 文本 + 500 多模态)
-  ↓ text_safety_pipeline.py
-清洗后 (6,529 条, 保留率 68.9%)
-  ↓ run_augmentation.py
-增强数据 (243 条: 对比+类别+印刷术+版权+改写)
-  ↓ generate_report.py
-最终交付 (SFT 6,772 + DPO 4,225 + Eval 1,305)
-```
-
-## 消融实验设计
-
-| 实验 | 去掉什么 | 预期影响 |
-|------|---------|---------|
-| Full | 无 | 对照基准 |
-| -Safety | WildGuardMix | AUC 大幅下降 |
-| -Contrastive | 对比无害数据 | Over-refusal 升高 |
-| -Augmentation | 合成增强 | 稀有类别 F1 下降 |
-| -Copyright | 版权数据 | 版权 Recall ≈ 0 |
-| -ToxiGen | ToxiGen | 仇恨言论 F1 略降 |
+---
 
 ## 踩坑记录
 
-详见 `docs/interaction_log.md`，主要包括：
-1. HuggingFace Gated Dataset 认证 → 合成数据替代
-2. SafeBench category 字段异常 → 关键词推断
-3. XSTest 多文件重复 + 标签误判 → 只读 prompts.jsonl
-4. Python 3.9 f-string 限制 → 提取变量
-5. Notebook JSON 中文引号 → Python 脚本生成
-6. Notebook source 行分割 → `_split_source()` 函数
+完整记录在 `docs/interaction_log.md`，最常见的 3 个：
+
+| 问题 | 原因 | 解决方案 |
+|------|------|---------|
+| HuggingFace Gated Dataset 下载失败 | WildGuardMix 等需要申请访问权限 | 用合成数据替代，全流程可跑通 |
+| XSTest 所有样本被标为 harmful | 6 个文件重复 + type 字段误判 | 只读 `prompts.jsonl`，默认标为 safe |
+| Notebook JSON 解析失败 | 中文引号破坏 JSON 结构 | 用 Python 脚本 + `json.dump` 生成 |
+
+---
+
+## 运行环境
+
+- macOS（M4 Max 验证），Python 3.9+，PyTorch MPS 加速
+- 依赖安装：`bash setup.sh`（自动创建 venv + 安装全部依赖）
