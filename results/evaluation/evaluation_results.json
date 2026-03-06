@@ -1,0 +1,179 @@
+{
+  "benchmarks": {
+    "wildguard_test": {
+      "config": {
+        "name": "WildGuardTest",
+        "description": "5.3K 人工标注安全测试集，绝对不可污染训练集",
+        "metrics": [
+          "auc_roc",
+          "precision",
+          "recall",
+          "f1",
+          "per_class_f1"
+        ],
+        "target_auc": 0.85
+      },
+      "metrics": {
+        "accuracy": 1.0,
+        "f1": 1.0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "auc": 0.9999999999999999,
+        "confusion_matrix": [
+          [
+            194,
+            0
+          ],
+          [
+            0,
+            206
+          ]
+        ],
+        "true_positive": 206,
+        "true_negative": 194,
+        "false_positive": 0,
+        "false_negative": 0,
+        "over_refusal_rate": 0.0,
+        "classification_report": {
+          "unharmful": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "support": 194.0
+          },
+          "harmful": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "support": 206.0
+          },
+          "accuracy": 1.0,
+          "macro avg": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "support": 400.0
+          },
+          "weighted avg": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "support": 400.0
+          }
+        },
+        "asr_by_type": {
+          "vanilla": 0.0
+        },
+        "optimal_threshold": {
+          "threshold": 0.8809031248092651,
+          "recall": 1.0,
+          "precision": 1.0,
+          "f1": 1.0
+        }
+      },
+      "data_size": 400
+    },
+    "harmbench": {
+      "error": "index 1 is out of bounds for axis 0 with size 1"
+    },
+    "xstest": {
+      "config": {
+        "name": "XSTest",
+        "description": "250 对 over-refusal 测试",
+        "metrics": [
+          "over_refusal_rate"
+        ],
+        "target_over_refusal": 0.1
+      },
+      "metrics": {
+        "accuracy": 0.9666666666666667,
+        "f1": 0.0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "auc": NaN,
+        "confusion_matrix": [
+          [
+            435,
+            15
+          ],
+          [
+            0,
+            0
+          ]
+        ],
+        "true_positive": 0,
+        "true_negative": 435,
+        "false_positive": 15,
+        "false_negative": 0,
+        "over_refusal_rate": 0.03333333333333333,
+        "classification_report": {
+          "unharmful": {
+            "precision": 1.0,
+            "recall": 0.9666666666666667,
+            "f1-score": 0.9830508474576272,
+            "support": 450.0
+          },
+          "harmful": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1-score": 0.0,
+            "support": 0.0
+          },
+          "accuracy": 0.9666666666666667,
+          "macro avg": {
+            "precision": 0.5,
+            "recall": 0.48333333333333334,
+            "f1-score": 0.4915254237288136,
+            "support": 450.0
+          },
+          "weighted avg": {
+            "precision": 1.0,
+            "recall": 0.9666666666666667,
+            "f1-score": 0.9830508474576272,
+            "support": 450.0
+          }
+        },
+        "asr_by_type": {},
+        "optimal_threshold": {
+          "threshold": 0.09329324215650558,
+          "recall": 0.0,
+          "precision": 0.0,
+          "f1": 0.0
+        }
+      },
+      "data_size": 450
+    }
+  },
+  "copyright": {
+    "0.8": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 20,
+      "tn": 20,
+      "total_detected": 0
+    },
+    "0.85": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 20,
+      "tn": 20,
+      "total_detected": 0
+    },
+    "0.9": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 20,
+      "tn": 20,
+      "total_detected": 0
+    }
+  }
+}
