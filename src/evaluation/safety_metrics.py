@@ -36,16 +36,22 @@ def compute_safety_metrics(y_true, y_pred, y_prob=None, label_names=None):
 
     metrics = {
         "accuracy": float(np.mean(np.array(y_true) == np.array(y_pred))),
-        "f1": float(f1_score(y_true, y_pred)),
-        "precision": float(precision_score(y_true, y_pred)),
-        "recall": float(recall_score(y_true, y_pred)),
+        "f1": float(f1_score(y_true, y_pred, zero_division=0)),
+        "precision": float(precision_score(y_true, y_pred, zero_division=0)),
+        "recall": float(recall_score(y_true, y_pred, zero_division=0)),
     }
 
     if y_prob is not None:
-        metrics["auc"] = float(roc_auc_score(y_true, y_prob))
+        # AUC 需要两个类别都存在，单类别数据集跳过
+        unique_labels = set(y_true)
+        if len(unique_labels) >= 2:
+            metrics["auc"] = float(roc_auc_score(y_true, y_prob))
+        else:
+            metrics["auc"] = None
+            metrics["auc_note"] = f"AUC undefined: only label(s) {unique_labels} present"
 
-    # 混淆矩阵
-    cm = confusion_matrix(y_true, y_pred)
+    # 混淆矩阵（强制 2×2，防止单类别数据集返回 1×1）
+    cm = confusion_matrix(y_true, y_pred, labels=[0, 1])
     metrics["confusion_matrix"] = cm.tolist()
     metrics["true_positive"] = int(cm[1, 1])
     metrics["true_negative"] = int(cm[0, 0])
@@ -58,9 +64,10 @@ def compute_safety_metrics(y_true, y_pred, y_prob=None, label_names=None):
     else:
         metrics["over_refusal_rate"] = 0.0
 
-    # 分类报告
+    # 分类报告（强制包含两个类别）
     metrics["classification_report"] = classification_report(
-        y_true, y_pred, target_names=label_names, output_dict=True
+        y_true, y_pred, target_names=label_names, labels=[0, 1],
+        output_dict=True, zero_division=0
     )
 
     return metrics

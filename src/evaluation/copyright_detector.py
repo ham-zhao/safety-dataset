@@ -66,14 +66,16 @@ def evaluate_copyright_detection(ip_library, test_queries, test_labels,
     if not ip_library:
         return {"error": "IP library is empty"}
 
-    ip_embeddings = np.stack(list(ip_library.values()))
+    ip_embeddings = np.stack(list(ip_library.values())).astype(np.float64)
     ip_names = list(ip_library.keys())
 
     results = {}
     for threshold in thresholds:
         detections = []
         for query_emb in test_queries:
-            similarities = query_emb @ ip_embeddings.T
+            q = np.asarray(query_emb, dtype=np.float64)
+            with np.errstate(divide='ignore', over='ignore', invalid='ignore'):
+                similarities = q @ ip_embeddings.T
             max_sim = float(np.max(similarities))
             max_ip = ip_names[int(np.argmax(similarities))]
             detections.append({
@@ -118,18 +120,22 @@ def generate_copyright_test_data(ip_library, n_positive=20, n_negative=20, seed=
     test_labels = []
 
     # 正例：IP embedding + 小扰动
+    # 噪声尺度 0.02：512 维空间中 noise_norm ≈ 0.45，余弦相似度 ≈ 0.9
+    # （0.1 太大 → noise_norm ≈ 2.26 → 相似度仅 0.4，全部低于阈值）
+    noise_scale = 0.02
     for i in range(n_positive):
         base = embeddings[i % len(embeddings)]
-        noise = np.random.randn(*base.shape) * 0.1
+        noise = np.random.randn(*base.shape).astype(base.dtype) * noise_scale
         perturbed = base + noise
         perturbed = perturbed / np.linalg.norm(perturbed)
         test_queries.append(perturbed)
         test_labels.append(1)
 
-    # 负例：随机 embedding
+    # 负例：随机 embedding（确保 dtype 与 IP 库一致）
     dim = embeddings[0].shape[0]
+    target_dtype = embeddings[0].dtype
     for i in range(n_negative):
-        random_emb = np.random.randn(dim).astype(np.float32)
+        random_emb = np.random.randn(dim).astype(target_dtype)
         random_emb = random_emb / np.linalg.norm(random_emb)
         test_queries.append(random_emb)
         test_labels.append(0)

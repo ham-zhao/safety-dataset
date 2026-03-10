@@ -4,7 +4,7 @@
 # 工作流：先用 smoke_test 跑通全流程确认无报错，
 #         再改为 full_run 产出正式结果。
 
-run_mode: "smoke_test"  # 可选: "smoke_test" | "full_run"
+run_mode: "full_run"  # 可选: "smoke_test" | "full_run"
 
 smoke_test:
   text_sample_size: 2000        # 文本安全数据取 2000 条
